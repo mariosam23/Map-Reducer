@@ -2,12 +2,14 @@
 
 #include <pthread.h>
 #include <string>
-#include <vector>
+#include <unordered_set>
+#include <unordered_map>
 
 #include "safe_queue.h"
+#include "utils.h"
 
 struct mapper_t {
-	safe_queue<std::pair<std::string, int>>& q;
-	std::vector<std::pair<std::string, int>> words;
-	pthread_barrier_t& barrier;
+    safe_queue<pair<string, int>>* q;
+    unordered_map<string, unordered_set<int>> word_to_file_ids;
+    pthread_barrier_t* barrier;
 };
