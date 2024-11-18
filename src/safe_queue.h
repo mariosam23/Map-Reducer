@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 
+// thread safe queue to allow dynamic allocation of files to mappers
 template <typename T>
 class safe_queue {
 private:
