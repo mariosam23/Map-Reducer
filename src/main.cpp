@@ -70,14 +70,10 @@ void* reduce_func(void* arg) {
     int num_reducers = reducer_data->num_reducers;
     vector<mapper_t>& mappers_data = *(reducer_data->mappers_data);
 
-
-    vector<char> assigned_letters;
-    for (char c = 'a'; c <= 'z'; ++c) {
-        int letter_index = c - 'a';
-        int assigned_reducer = letter_index % num_reducers;
-        if (assigned_reducer == reducer_id) {
-            assigned_letters.push_back(c);
-        }
+    // each reducer will have a set of letters assigned to work on
+    unordered_set<char> assigned_letters;
+    for (char c = 'a' + reducer_id; c <= 'z'; c += num_reducers) {
+        assigned_letters.insert(c);
     }
 
     unordered_map<string, unordered_set<int>> word_file_map_merged;
@@ -85,52 +81,45 @@ void* reduce_func(void* arg) {
     for (const auto& mapper_data : mappers_data) {
         const unordered_map<string, unordered_set<int>>& word_map = mapper_data.word_to_file_ids;
         for (const auto& entry : word_map) {
-            const string& word = entry.first;
-            const unordered_set<int>& file_ids = entry.second;
-
-            char first_char = word[0];
-
-            if (std::find(assigned_letters.begin(), assigned_letters.end(), first_char) != assigned_letters.end()) {
-                word_file_map_merged[word].insert(file_ids.begin(), file_ids.end());
+            if (assigned_letters.count(entry.first.front())) {
+                word_file_map_merged[entry.first].insert(entry.second.begin(), entry.second.end());
             }
         }
     }
 
     vector<pair<string, vector<int>>> word_file_list;
     word_file_list.reserve(word_file_map_merged.size());
+
+    // adding to the list the words and their sorted file ids
     for (const auto& entry : word_file_map_merged) {
+        if (assigned_letters.count(entry.first.front()) == 0) continue;
         vector<int> sorted_file_ids(entry.second.begin(), entry.second.end());
         sort(sorted_file_ids.begin(), sorted_file_ids.end());
         word_file_list.push_back({entry.first, sorted_file_ids});
     }
 
-    std::sort(word_file_list.begin(), word_file_list.end(),
-        [](const pair<string, vector<int>>& a, const pair<string, vector<int>>& b) {
-            if (a.second.size() == b.second.size()) {
-                return a.first < b.first;
-            }
-            return a.second.size() > b.second.size();
+    // sort the list by the number of file ids and then by the word
+    std::sort(word_file_list.begin(), word_file_list.end(), [](const auto& w1, const auto& w2) {
+            return (w1.second.size() == w2.second.size())
+                ? w1.first < w2.first
+                : w1.second.size() > w2.second.size();
         });
 
-    for (char c : assigned_letters) {
-        string file_name = string(1, c) + ".txt";
-        ofstream file(file_name);
-        assert(file.is_open() && "Could not open file");
+    for (const char letter : assigned_letters) {
+        ofstream out(string(1, letter) + ".txt");
+        assert(out.is_open() && "Could not open file");
 
-        for (const auto& entry : word_file_list) {
-            if (entry.first[0] == c) {
-                file << entry.first << ":[";
-                for (size_t i = 0; i < entry.second.size(); ++i) {
-                    file << entry.second[i];
-                    if (i + 1 < entry.second.size()) {
-                        file << " ";
-                    }
-                }
-                file << "]\n";
+        for (const auto& word_file : word_file_list) {
+            if (word_file.first.front() != letter) continue;
+            out << word_file.first << ":[";
+            for (size_t i = 0; i < word_file.second.size(); ++i) {
+                out << word_file.second.at(i);
+                (i + 1 < word_file.second.size()) ? out << " " : out << "";
             }
+            out << "]\n";
         }
 
-        file.close();
+        out.close();
     }
 
     return NULL;
