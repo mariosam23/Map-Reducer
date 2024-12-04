@@ -10,7 +10,6 @@
 #include "safe_queue.h"
 #include "mapper.h"
 #include "reducer.h"
-#include "utils.h"
 
 using namespace std;
 
@@ -80,9 +79,12 @@ void* reduce_func(void* arg) {
 
     for (const auto& mapper_data : mappers_data) {
         const unordered_map<string, unordered_set<int>>& word_map = mapper_data.word_to_file_ids;
-        for (const auto& entry : word_map) {
-            if (assigned_letters.count(entry.first.front())) {
-                word_file_map_merged[entry.first].insert(entry.second.begin(), entry.second.end());
+        for (const auto& file_ids : word_map) {
+            const auto file_name = file_ids.first;
+            const auto file_id_set = file_ids.second;
+
+            if (assigned_letters.count(file_name.at(0))) {
+                word_file_map_merged[file_name].insert(file_id_set.begin(), file_id_set.end());
             }
         }
     }
@@ -91,20 +93,25 @@ void* reduce_func(void* arg) {
     word_file_list.reserve(word_file_map_merged.size());
 
     // adding to the list the words and their sorted file ids
-    for (const auto& entry : word_file_map_merged) {
-        if (assigned_letters.count(entry.first.front()) == 0) continue;
-        vector<int> sorted_file_ids(entry.second.begin(), entry.second.end());
-        sort(sorted_file_ids.begin(), sorted_file_ids.end());
-        word_file_list.push_back({entry.first, sorted_file_ids});
+    for (const auto& file_ids : word_file_map_merged) {
+        const auto file_name = file_ids.first;
+        const auto file_id_set = file_ids.second;
+
+        if (assigned_letters.count(file_name.at(0)) == 0) continue;
+        
+        vector<int> sorted_file_ids(file_id_set.begin(), file_id_set.end());
+        std::sort(sorted_file_ids.begin(), sorted_file_ids.end());
+        word_file_list.push_back({file_name, sorted_file_ids});
     }
 
-    // sort the list by the number of file ids and then by the word
     std::sort(word_file_list.begin(), word_file_list.end(), [](const auto& w1, const auto& w2) {
             return (w1.second.size() == w2.second.size())
                 ? w1.first < w2.first
                 : w1.second.size() > w2.second.size();
         });
 
+    
+    // write results to assigned letter files
     for (const char letter : assigned_letters) {
         ofstream out(string(1, letter) + ".txt");
         assert(out.is_open() && "Could not open file");
@@ -181,6 +188,8 @@ void push_filenames_and_ids(const string& input_file, safe_queue<pair<string, in
     string line;
     const string dir = "../checker/";
     int file_id = 1;
+
+    // no synchronization needed, because this is done before the threads are created
     while (getline(file, line)) {
         q.unsync_push({dir + line, file_id++});
     }

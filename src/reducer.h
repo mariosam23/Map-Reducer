@@ -5,8 +5,8 @@
 #include <vector>
 #include <unordered_set>
 
-#include "utils.h"
 #include "mapper.h" 
+#include "utils.h"
 
 struct reducer_t {
     int reducer_id;
